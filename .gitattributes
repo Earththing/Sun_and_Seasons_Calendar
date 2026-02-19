@@ -1,0 +1,3 @@
+# Normalize line endings: store LF in repo, checkout as-is on Windows
+* text=auto eol=lf
+*.ics text eol=crlf
