@@ -11,7 +11,12 @@ dependencies = [
     "geopy>=2.4",
     "icalendar>=5.0",
     "jinja2>=3.1",
+    "mcp[cli]>=1.0",
 ]
+
+[project.scripts]
+sun-and-seasons     = "app.cli:main"
+sun-and-seasons-mcp = "mcp_server:main"
 
 [project.optional-dependencies]
 dev = [
