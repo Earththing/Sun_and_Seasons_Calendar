@@ -50,22 +50,42 @@
   <!-- Step 3: Generate -->
   <section id="step-generate" class="card hidden">
     <h2>Step 3 &mdash; Get Your Calendar</h2>
-    <p class="hint">
-      The calendar contains <strong>sunrise</strong>, <strong>sunset</strong>,
-      <strong>solstices &amp; equinoxes</strong>, and <strong>DST clock changes</strong>
-      for the whole year.
-    </p>
 
-    <div class="button-group">
-      <a id="download-btn" href="#" class="btn btn-primary" download>
-        Download .ics file
-      </a>
+    <!-- Main calendar -->
+    <div class="download-block">
+      <h3 class="download-label">Main Calendar</h3>
+      <p class="hint">Sunrise, sunset, solstices &amp; equinoxes, and DST clock changes.</p>
+      <div class="button-group">
+        <a id="download-btn" href="#" class="btn btn-primary" download>
+          Download .ics file
+        </a>
+      </div>
+    </div>
+
+    <!-- Day length calendar -->
+    <div class="download-block">
+      <h3 class="download-label">Day Length Calendar <span class="optional-tag">optional</span></h3>
+      <p class="hint">One all-day event per day showing the duration of daylight. Import into its own calendar so you can show/hide it independently.</p>
+      <div class="input-row daylength-row">
+        <label for="daylength-format">Format:</label>
+        <select id="daylength-format">
+          <option value="hm">10h 23m</option>
+          <option value="hm_label">10h 23m daylight</option>
+          <option value="colon">10:23</option>
+          <option value="decimal">10.4 hrs</option>
+          <option value="hms">10h 23m 45s</option>
+        </select>
+        <a id="download-daylength-btn" href="#" class="btn btn-secondary-download" download>
+          Download .ics file
+        </a>
+      </div>
     </div>
 
     <div class="import-note">
-      <strong>Tip:</strong> Before importing, create a new calendar (e.g. <em>"Sun &amp; Seasons 2026"</em>)
-      and import into that. You can delete it later to remove all events at once.
-      <a href="/help">How to import &rarr;</a>
+      <strong>Tip:</strong> In Google Calendar, create a new calendar first
+      (e.g. <em>"Sun &amp; Seasons 2026"</em>) then import &mdash; the picker only
+      appears when you have more than one calendar.
+      <a href="/help">Full import instructions &rarr;</a>
     </div>
 
     <button id="preview-btn" class="btn btn-secondary">Show preview</button>
@@ -204,17 +224,38 @@ $('year-input').addEventListener('change', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Step 3: Download link
+// Step 3: Download links
 // ---------------------------------------------------------------------------
 function updateDownloadLink() {
   if (!state.lat || !state.lon || !state.year) return;
   const lat = state.lat.toFixed(4);
   const lon = state.lon.toFixed(4);
-  const url = `/calendar/${state.year}/${lat},${lon}.ics?download=true&display_name=${encodeURIComponent(state.displayName || '')}`;
-  const btn = $('download-btn');
-  btn.href = url;
-  btn.textContent = `Download ${state.year} calendar (.ics)`;
+  const dn = encodeURIComponent(state.displayName || '');
+
+  // Main calendar
+  const mainUrl = `/calendar/${state.year}/${lat},${lon}.ics?download=true&display_name=${dn}`;
+  const mainBtn = $('download-btn');
+  mainBtn.href = mainUrl;
+  mainBtn.textContent = `Download ${state.year} calendar (.ics)`;
+
+  // Day length calendar
+  updateDaylengthLink();
 }
+
+function updateDaylengthLink() {
+  if (!state.lat || !state.lon || !state.year) return;
+  const lat = state.lat.toFixed(4);
+  const lon = state.lon.toFixed(4);
+  const dn = encodeURIComponent(state.displayName || '');
+  const fmt = $('daylength-format').value;
+  const dlUrl = `/calendar/${state.year}/${lat},${lon}-daylength.ics?download=true&fmt=${fmt}&display_name=${dn}`;
+  const dlBtn = $('download-daylength-btn');
+  dlBtn.href = dlUrl;
+  dlBtn.textContent = `Download ${state.year} day length (.ics)`;
+}
+
+// Update day length link when format changes
+$('daylength-format').addEventListener('change', updateDaylengthLink);
 
 // ---------------------------------------------------------------------------
 // Preview

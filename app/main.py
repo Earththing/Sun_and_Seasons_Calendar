@@ -13,7 +13,7 @@ from .geocode import geocode_address
 from .timezone import get_tzid, get_dst_transitions
 from .solar import compute_year
 from .seasons import compute_seasons
-from .ics_builder import build_ics
+from .ics_builder import build_ics, build_daylength_ics, DayLengthFormat
 
 app = FastAPI(
     title="Sun & Seasons Calendar",
@@ -152,6 +152,80 @@ async def api_sun(
     }
 
 
+def _parse_coords(coords: str) -> tuple[float, float]:
+    """Parse 'lat,lon' path segment; raises HTTPException on bad input."""
+    try:
+        lat_str, lon_str = coords.split(",", 1)
+        lat, lon = float(lat_str), float(lon_str)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=400,
+            detail="Coordinates must be formatted as 'lat,lon' e.g. 34.052,-118.243",
+        )
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        raise HTTPException(status_code=400, detail="Coordinates out of range.")
+    return lat, lon
+
+
+# NOTE: The daylength route must be registered BEFORE the main .ics route.
+# Both paths share the pattern /calendar/{year}/{coords}*.ics — Starlette
+# matches routes in registration order and the greedy {coords} in the main
+# route would otherwise swallow "-daylength" as part of the coords value.
+
+@app.get("/calendar/{year}/{coords}-daylength.ics")
+async def calendar_daylength_ics(
+    year: int,
+    coords: str,
+    fmt: DayLengthFormat = DayLengthFormat.HM,
+    tzid: str = None,
+    display_name: str = None,
+    download: bool = False,
+):
+    """Generate a day-length ICS calendar — one all-day event per day.
+
+    Path: /calendar/2026/34.052,-118.243-daylength.ics
+    Query params:
+      - fmt: title format — hm (default), hm_label, colon, decimal, hms
+      - tzid: IANA timezone (auto-detected if omitted)
+      - display_name: human-readable label for the calendar name
+      - download: if true, serve as attachment
+    """
+    if year < YEAR_MIN or year > YEAR_MAX:
+        raise HTTPException(status_code=400, detail=f"Year must be between {YEAR_MIN} and {YEAR_MAX}.")
+
+    lat, lon = _parse_coords(coords)
+
+    if tzid is None:
+        try:
+            tzid = get_tzid(lat, lon)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    if display_name is None:
+        display_name = f"{lat:.4f}, {lon:.4f}"
+
+    days = compute_year(lat, lon, tzid, year)
+
+    ics_bytes = build_daylength_ics(
+        lat=lat, lon=lon, tzid=tzid, year=year,
+        display_name=display_name[:80],
+        days=days,
+        fmt=fmt,
+    )
+
+    disposition = "attachment" if download else "inline"
+    filename = f"sun-and-seasons-{year}-{lat:.4f},{lon:.4f}-daylength.ics"
+
+    return Response(
+        content=ics_bytes,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "public, max-age=86400",
+        },
+    )
+
+
 @app.get("/calendar/{year}/{coords}.ics")
 async def calendar_ics(
     year: int,
@@ -171,19 +245,7 @@ async def calendar_ics(
     if year < YEAR_MIN or year > YEAR_MAX:
         raise HTTPException(status_code=400, detail=f"Year must be between {YEAR_MIN} and {YEAR_MAX}.")
 
-    # Parse "lat,lon" from path segment
-    try:
-        lat_str, lon_str = coords.split(",", 1)
-        lat = float(lat_str)
-        lon = float(lon_str)
-    except (ValueError, AttributeError):
-        raise HTTPException(
-            status_code=400,
-            detail="Coordinates must be formatted as 'lat,lon' e.g. 34.052,-118.243",
-        )
-
-    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-        raise HTTPException(status_code=400, detail="Coordinates out of range.")
+    lat, lon = _parse_coords(coords)
 
     if tzid is None:
         try:

@@ -131,6 +131,18 @@ button:disabled { opacity: 0.55; cursor: default; }
 }
 .btn-secondary:hover:not(:disabled) { background: #dde3f0; }
 
+.btn-secondary-download {
+  display: inline-block;
+  background: #eef1f8;
+  color: #0f3460;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.btn-secondary-download:hover { background: #dde3f0; }
+
 .link-btn {
   background: none;
   border: none;
@@ -190,6 +202,53 @@ button:disabled { opacity: 0.55; cursor: default; }
   width: 100%;
 }
 .candidate-btn:hover { background: #dde3f0; }
+
+/* ---- Download blocks ---- */
+.download-block {
+  border-top: 1px solid #eef1f8;
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+.download-block:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+.download-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #16213e;
+  margin-bottom: 0.25rem;
+}
+.optional-tag {
+  font-size: 0.75rem;
+  font-weight: 400;
+  background: #eef1f8;
+  color: #555;
+  padding: 0.1em 0.5em;
+  border-radius: 10px;
+  vertical-align: middle;
+  margin-left: 0.4em;
+}
+.daylength-row {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #c8cfe0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+  cursor: pointer;
+}
+select:focus {
+  outline: none;
+  border-color: #0f3460;
+  box-shadow: 0 0 0 3px rgba(15,52,96,0.12);
+}
 
 /* ---- Import note ---- */
 .import-note {

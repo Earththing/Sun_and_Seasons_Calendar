@@ -192,3 +192,80 @@ class TestCalendarICS:
         # Negative longitudes (e.g. Americas) must parse correctly
         r = await client.get("/calendar/2026/34.052,-118.243.ics")
         assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# GET /calendar/{year}/{coords}-daylength.ics
+# ---------------------------------------------------------------------------
+
+class TestDayLengthICS:
+    async def test_returns_200_and_ics_content_type(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics")
+        assert r.status_code == 200
+        assert "text/calendar" in r.headers["content-type"]
+
+    async def test_ics_begins_with_vcalendar(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics")
+        assert r.content.startswith(b"BEGIN:VCALENDAR")
+
+    async def test_calname_includes_day_length(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics")
+        assert b"Day Length" in r.content
+
+    async def test_download_flag_sets_attachment(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?download=true")
+        assert "attachment" in r.headers["content-disposition"]
+
+    async def test_inline_without_download_flag(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics")
+        assert "inline" in r.headers["content-disposition"]
+
+    async def test_filename_contains_daylength(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?download=true")
+        assert "daylength" in r.headers["content-disposition"]
+
+    async def test_default_format_hm(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics")
+        assert r.status_code == 200
+        # Default HM format should contain 'h' and 'm' pattern in content
+        assert b"h " in r.content and b"m" in r.content
+
+    async def test_format_colon(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?fmt=colon")
+        assert r.status_code == 200
+        assert r.content.startswith(b"BEGIN:VCALENDAR")
+
+    async def test_format_decimal(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?fmt=decimal")
+        assert r.status_code == 200
+        assert b"hrs" in r.content
+
+    async def test_format_hms(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?fmt=hms")
+        assert r.status_code == 200
+        assert r.content.startswith(b"BEGIN:VCALENDAR")
+
+    async def test_format_hm_label(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?fmt=hm_label")
+        assert r.status_code == 200
+        assert b"daylight" in r.content
+
+    async def test_invalid_format_returns_422(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?fmt=invalid_fmt")
+        assert r.status_code == 422
+
+    async def test_invalid_coords_returns_400(self, client):
+        r = await client.get("/calendar/2026/not-a-coord-daylength.ics")
+        assert r.status_code == 400
+
+    async def test_out_of_range_year_returns_400(self, client):
+        r = await client.get("/calendar/1800/34.052,-118.243-daylength.ics")
+        assert r.status_code == 400
+
+    async def test_cache_control_header(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics")
+        assert "max-age" in r.headers.get("cache-control", "")
+
+    async def test_custom_display_name_in_calname(self, client):
+        r = await client.get("/calendar/2026/34.052,-118.243-daylength.ics?display_name=My+Home")
+        assert b"My Home" in r.content

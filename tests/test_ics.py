@@ -10,7 +10,7 @@ from icalendar import Calendar
 from app.solar import compute_year
 from app.seasons import compute_seasons
 from app.timezone import get_dst_transitions
-from app.ics_builder import build_ics
+from app.ics_builder import build_ics, build_daylength_ics, DayLengthFormat
 
 
 # --- Shared fixture: generate a small but real ICS for LA 2026 ---
@@ -123,6 +123,30 @@ class TestEventContent:
         solstice_equinox = [s for s in summaries if "Solstice" in s or "Equinox" in s]
         assert len(solstice_equinox) == 4
 
+    def test_season_events_are_all_day(self, la_cal):
+        """Solstice/equinox events must be all-day (not timed)."""
+        events = self._get_events(la_cal)
+        season_events = [
+            e for e in events
+            if "Solstice" in str(e.get("SUMMARY", "")) or "Equinox" in str(e.get("SUMMARY", ""))
+        ]
+        assert len(season_events) == 4
+        for e in season_events:
+            dtstart = e.decoded("DTSTART")
+            assert isinstance(dtstart, date) and not isinstance(dtstart, datetime), \
+                f"Season event should be all-day, got {type(dtstart)}: {e.get('SUMMARY')}"
+
+    def test_season_description_includes_exact_time(self, la_cal):
+        """Solstice/equinox descriptions must include the exact local time."""
+        events = self._get_events(la_cal)
+        season_events = [
+            e for e in events
+            if "Solstice" in str(e.get("SUMMARY", "")) or "Equinox" in str(e.get("SUMMARY", ""))
+        ]
+        for e in season_events:
+            desc = str(e.get("DESCRIPTION", ""))
+            assert "Exact time:" in desc, f"Missing exact time in description: {e.get('SUMMARY')}"
+
     def test_has_dst_events(self, la_cal):
         events = self._get_events(la_cal)
         summaries = [str(e.get("SUMMARY", "")) for e in events]
@@ -201,3 +225,107 @@ class TestNoDSTZone:
         events = [c for c in cal.walk() if isinstance(c, Event)]
         dst_events = [e for e in events if "Spring Forward" in str(e.get("SUMMARY", "")) or "Fall Back" in str(e.get("SUMMARY", ""))]
         assert len(dst_events) == 0
+
+
+# --- Day length calendar tests ---
+
+@pytest.fixture(scope="module")
+def la_days():
+    return compute_year(LAT, LON, TZID, YEAR)
+
+
+class TestDayLengthICS:
+    def _get_events(self, ics_bytes):
+        from icalendar import Event
+        cal = Calendar.from_ical(ics_bytes)
+        return [c for c in cal.walk() if isinstance(c, Event)]
+
+    def _build(self, fmt=DayLengthFormat.HM):
+        days = compute_year(LAT, LON, TZID, YEAR)
+        return build_daylength_ics(LAT, LON, TZID, YEAR, "Los Angeles, CA", days, fmt=fmt)
+
+    def test_returns_365_events(self):
+        events = self._get_events(self._build())
+        assert len(events) == 365
+
+    def test_all_events_are_all_day(self):
+        events = self._get_events(self._build())
+        for e in events:
+            dtstart = e.decoded("DTSTART")
+            assert isinstance(dtstart, date) and not isinstance(dtstart, datetime), \
+                f"Day length event should be all-day, got {type(dtstart)}"
+
+    def test_all_events_have_uid(self):
+        events = self._get_events(self._build())
+        for e in events:
+            assert e.get("UID") is not None
+
+    def test_uids_are_unique(self):
+        events = self._get_events(self._build())
+        uids = [str(e.get("UID")) for e in events]
+        assert len(uids) == len(set(uids))
+
+    def test_calname_includes_day_length(self):
+        ics = self._build()
+        assert b"Day Length" in ics
+
+    def test_crlf_line_endings(self):
+        assert b"\r\n" in self._build()
+
+    def test_line_length_max_75_octets(self):
+        for line in self._build().split(b"\r\n"):
+            assert len(line) <= 75
+
+    # --- Format tests ---
+
+    def test_format_hm(self):
+        events = self._get_events(self._build(DayLengthFormat.HM))
+        summaries = [str(e.get("SUMMARY", "")) for e in events if e.get("SUMMARY")]
+        # Should look like "10h 23m" — contains 'h' and 'm', no 'daylight'
+        timed = [s for s in summaries if "h" in s and "m" in s]
+        assert len(timed) > 300
+        assert not any("daylight" in s for s in timed)
+
+    def test_format_hm_label(self):
+        events = self._get_events(self._build(DayLengthFormat.HM_LABEL))
+        summaries = [str(e.get("SUMMARY", "")) for e in events]
+        timed = [s for s in summaries if "daylight" in s]
+        assert len(timed) > 300
+
+    def test_format_colon(self):
+        events = self._get_events(self._build(DayLengthFormat.COLON))
+        summaries = [str(e.get("SUMMARY", "")) for e in events]
+        # Colon format: "10:23" — contains ':' and no 'h'
+        colon = [s for s in summaries if ":" in s and "h" not in s]
+        assert len(colon) > 300
+
+    def test_format_decimal(self):
+        events = self._get_events(self._build(DayLengthFormat.DECIMAL))
+        summaries = [str(e.get("SUMMARY", "")) for e in events]
+        decimal = [s for s in summaries if "hrs" in s]
+        assert len(decimal) > 300
+
+    def test_format_hms(self):
+        events = self._get_events(self._build(DayLengthFormat.HMS))
+        summaries = [str(e.get("SUMMARY", "")) for e in events]
+        # HMS includes seconds: "10h 23m 45s"
+        hms = [s for s in summaries if "h" in s and "m" in s and "s" in s]
+        assert len(hms) > 300
+
+    def test_description_always_uses_full_hms(self):
+        """Description should always show full HMS regardless of title format."""
+        events = self._get_events(self._build(DayLengthFormat.COLON))
+        timed = [e for e in events if ":" in str(e.get("SUMMARY", ""))]
+        for e in timed[:5]:  # spot-check
+            desc = str(e.get("DESCRIPTION", ""))
+            assert "Day length:" in desc
+            # Description should contain 'h' and 'm' and 's'
+            assert "h" in desc and "m" in desc and "s" in desc
+
+    def test_uid_stability_across_formats(self):
+        """UIDs must be identical regardless of format (same day, same location)."""
+        events_hm  = self._get_events(self._build(DayLengthFormat.HM))
+        events_hms = self._get_events(self._build(DayLengthFormat.HMS))
+        uids_hm  = sorted(str(e.get("UID")) for e in events_hm)
+        uids_hms = sorted(str(e.get("UID")) for e in events_hms)
+        assert uids_hm == uids_hms
