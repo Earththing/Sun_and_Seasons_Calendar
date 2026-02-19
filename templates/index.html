@@ -7,7 +7,320 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
+<header>
   <h1>Sun &amp; Seasons Calendar</h1>
-  <p>UI coming soon.</p>
+  <p class="tagline">Generate a personal calendar of sunrise, sunset, solstices &amp; seasons for any location.</p>
+</header>
+
+<main>
+  <!-- Step 1: Location -->
+  <section id="step-location" class="card">
+    <h2>Step 1 &mdash; Your Location</h2>
+    <p class="hint">Enter a city, address, or region. Your address is only used to look up coordinates and is never stored.</p>
+    <div class="input-row">
+      <input type="text" id="address-input" placeholder="e.g. Denver, CO  or  Sydney, Australia"
+             autocomplete="off" spellcheck="false" />
+      <button id="lookup-btn">Look up</button>
+    </div>
+    <div id="lookup-error" class="error hidden"></div>
+
+    <!-- Candidate list (shown when multiple results) -->
+    <div id="candidates" class="hidden">
+      <p class="hint">Multiple locations found &mdash; pick the right one:</p>
+      <ul id="candidate-list"></ul>
+    </div>
+
+    <!-- Confirmed location -->
+    <div id="confirmed-location" class="confirmed hidden">
+      <span id="confirmed-text"></span>
+      <button id="change-location-btn" class="link-btn">Change</button>
+    </div>
+  </section>
+
+  <!-- Step 2: Year -->
+  <section id="step-year" class="card hidden">
+    <h2>Step 2 &mdash; Year</h2>
+    <div class="input-row">
+      <label for="year-input">Year:</label>
+      <input type="number" id="year-input" min="1901" max="2099" value="" style="width:90px" />
+    </div>
+  </section>
+
+  <!-- Step 3: Generate -->
+  <section id="step-generate" class="card hidden">
+    <h2>Step 3 &mdash; Get Your Calendar</h2>
+    <p class="hint">
+      The calendar contains <strong>sunrise</strong>, <strong>sunset</strong>,
+      <strong>solstices &amp; equinoxes</strong>, and <strong>DST clock changes</strong>
+      for the whole year.
+    </p>
+
+    <div class="button-group">
+      <a id="download-btn" href="#" class="btn btn-primary" download>
+        Download .ics file
+      </a>
+    </div>
+
+    <div class="import-note">
+      <strong>Tip:</strong> Before importing, create a new calendar (e.g. <em>"Sun &amp; Seasons 2026"</em>)
+      and import into that. You can delete it later to remove all events at once.
+      <a href="/help">How to import &rarr;</a>
+    </div>
+
+    <button id="preview-btn" class="btn btn-secondary">Show preview</button>
+
+    <div id="preview-section" class="hidden">
+      <div id="preview-loading" class="loading hidden">Loading preview&hellip;</div>
+      <div id="preview-content"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>
+    Geocoding by <a href="https://nominatim.openstreetmap.org/" target="_blank" rel="noopener">Nominatim / OpenStreetMap</a> contributors &mdash;
+    <a href="/help">How to import / remove this calendar</a>
+  </p>
+</footer>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const state = {
+  lat: null,
+  lon: null,
+  displayName: null,
+  year: new Date().getFullYear(),
+};
+
+// ---------------------------------------------------------------------------
+// DOM helpers
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+
+function show(id)   { $(id).classList.remove('hidden'); }
+function hide(id)   { $(id).classList.add('hidden'); }
+function showError(msg) { $('lookup-error').textContent = msg; show('lookup-error'); }
+function hideError()    { hide('lookup-error'); }
+
+// ---------------------------------------------------------------------------
+// Step 1: Geocode
+// ---------------------------------------------------------------------------
+$('lookup-btn').addEventListener('click', doLookup);
+$('address-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLookup(); });
+
+async function doLookup() {
+  const address = $('address-input').value.trim();
+  if (!address) { showError('Please enter an address or city.'); return; }
+
+  hideError();
+  $('lookup-btn').disabled = true;
+  $('lookup-btn').textContent = 'Looking up...';
+  hide('candidates');
+  hide('confirmed-location');
+
+  try {
+    const resp = await fetch('/geocode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showError(data.detail || 'Location not found. Try a different address.');
+      return;
+    }
+
+    const candidates = data.candidates;
+    if (candidates.length === 1) {
+      confirmLocation(candidates[0]);
+    } else {
+      showCandidates(candidates);
+    }
+  } catch (err) {
+    showError('Could not reach geocoding service. Check your connection.');
+  } finally {
+    $('lookup-btn').disabled = false;
+    $('lookup-btn').textContent = 'Look up';
+  }
+}
+
+function showCandidates(candidates) {
+  const list = $('candidate-list');
+  list.innerHTML = '';
+  candidates.forEach(c => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = 'link-btn candidate-btn';
+    btn.textContent = c.display_name;
+    btn.addEventListener('click', () => confirmLocation(c));
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+  show('candidates');
+}
+
+function confirmLocation(candidate) {
+  state.lat = candidate.lat;
+  state.lon = candidate.lon;
+  state.displayName = candidate.display_name;
+
+  hide('candidates');
+  $('confirmed-text').textContent = candidate.display_name;
+  show('confirmed-location');
+
+  $('year-input').value = state.year;
+  show('step-year');
+  show('step-generate');
+  updateDownloadLink();
+  $('step-year').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('change-location-btn').addEventListener('click', () => {
+  hide('confirmed-location');
+  hide('step-year');
+  hide('step-generate');
+  hide('preview-section');
+  $('preview-content').innerHTML = '';
+  $('address-input').value = '';
+  $('address-input').focus();
+});
+
+// ---------------------------------------------------------------------------
+// Step 2: Year
+// ---------------------------------------------------------------------------
+$('year-input').addEventListener('change', () => {
+  const y = parseInt($('year-input').value, 10);
+  if (y >= 1901 && y <= 2099) {
+    state.year = y;
+    updateDownloadLink();
+    // Clear stale preview if year changed
+    hide('preview-section');
+    $('preview-content').innerHTML = '';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Step 3: Download link
+// ---------------------------------------------------------------------------
+function updateDownloadLink() {
+  if (!state.lat || !state.lon || !state.year) return;
+  const lat = state.lat.toFixed(4);
+  const lon = state.lon.toFixed(4);
+  const url = `/calendar/${state.year}/${lat},${lon}.ics?download=true&display_name=${encodeURIComponent(state.displayName || '')}`;
+  const btn = $('download-btn');
+  btn.href = url;
+  btn.textContent = `Download ${state.year} calendar (.ics)`;
+}
+
+// ---------------------------------------------------------------------------
+// Preview
+// ---------------------------------------------------------------------------
+$('preview-btn').addEventListener('click', loadPreview);
+
+async function loadPreview() {
+  if (!state.lat || !state.lon) return;
+  show('preview-section');
+  show('preview-loading');
+  $('preview-content').innerHTML = '';
+  $('preview-btn').disabled = true;
+  $('preview-btn').textContent = 'Loading...';
+
+  const lat = state.lat.toFixed(4);
+  const lon = state.lon.toFixed(4);
+
+  try {
+    const resp = await fetch(`/api/v1/sun?lat=${lat}&lon=${lon}&year=${state.year}`);
+    if (!resp.ok) throw new Error('API error');
+    const data = await resp.json();
+    renderPreview(data);
+  } catch (err) {
+    $('preview-content').innerHTML = '<p class="error">Could not load preview.</p>';
+  } finally {
+    hide('preview-loading');
+    $('preview-btn').disabled = false;
+    $('preview-btn').textContent = 'Show preview';
+  }
+}
+
+function fmtTime(iso) {
+  if (!iso) return '&mdash;';
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtDuration(sec) {
+  if (sec == null) return '&mdash;';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return `${h}h ${String(m).padStart(2,'0')}m`;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function renderPreview(data) {
+  const meta = data.meta;
+  const days = data.days;
+  const seasons = data.events.seasons;
+  const dst = data.events.dst;
+
+  // One row per month using the 21st
+  const sampleDays = [1,2,3,4,5,6,7,8,9,10,11,12].map(month => {
+    return days.find(d => d.date.startsWith(`${meta.year}-${String(month).padStart(2,'0')}-21`));
+  }).filter(Boolean);
+
+  let html = `<p><strong>Location:</strong> ${escHtml(state.displayName)}<br>
+  <strong>Timezone:</strong> ${escHtml(meta.tzid)}</p>`;
+
+  html += `<h4>Sample Solar Times</h4>
+  <table class="preview-table">
+    <thead><tr><th>Date</th><th>Sunrise</th><th>Sunset</th><th>Day Length</th></tr></thead>
+    <tbody>`;
+  sampleDays.forEach(d => {
+    if (d.polar_event) {
+      html += `<tr><td>${d.date}</td><td colspan="3"><em>${escHtml(d.polar_event.replace('_',' '))}</em></td></tr>`;
+    } else {
+      html += `<tr>
+        <td>${d.date}</td>
+        <td>${fmtTime(d.sunrise)}</td>
+        <td>${fmtTime(d.sunset)}</td>
+        <td>${fmtDuration(d.day_length_sec)}</td>
+      </tr>`;
+    }
+  });
+  html += `</tbody></table>`;
+
+  html += `<h4>Solstices &amp; Equinoxes</h4><ul class="event-list">`;
+  seasons.forEach(s => {
+    const local = new Date(s.local);
+    const label = s.kind.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    const dateStr = local.toLocaleDateString([], {month:'short', day:'numeric'});
+    const timeStr = local.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    html += `<li><strong>${dateStr} ${timeStr}</strong> &mdash; ${escHtml(label)}</li>`;
+  });
+  html += `</ul>`;
+
+  if (dst.length > 0) {
+    html += `<h4>DST Clock Changes</h4><ul class="event-list">`;
+    dst.forEach(t => {
+      const label = t.kind === 'dst_start' ? 'Clocks Spring Forward' : 'Clocks Fall Back';
+      html += `<li><strong>${t.local_date}</strong> &mdash; ${label} (${escHtml(t.offset_before)} &rarr; ${escHtml(t.offset_after)})</li>`;
+    });
+    html += `</ul>`;
+  } else {
+    html += `<p><em>This location does not observe DST &mdash; no clock change events.</em></p>`;
+  }
+
+  $('preview-content').innerHTML = html;
+}
+</script>
+
 </body>
 </html>

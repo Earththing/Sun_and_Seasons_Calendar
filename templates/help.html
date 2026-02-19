@@ -3,11 +3,86 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Help — Sun &amp; Seasons Calendar</title>
+  <title>Help &mdash; Sun &amp; Seasons Calendar</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <h1>How to add, hide, or remove your Sun &amp; Seasons Calendar</h1>
-  <p>Help content coming soon.</p>
+
+<header>
+  <h1>Sun &amp; Seasons Calendar</h1>
+  <p class="tagline"><a href="/">&larr; Back to calendar generator</a></p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>How to import your .ics file</h2>
+    <p>After downloading the <code>.ics</code> file, follow the steps for your calendar app:</p>
+
+    <h3>Google Calendar</h3>
+    <ol>
+      <li>Open <a href="https://calendar.google.com" target="_blank" rel="noopener">calendar.google.com</a>.</li>
+      <li>In the left sidebar, click the <strong>+</strong> next to <em>Other calendars</em> &rarr; <em>Create new calendar</em>. Name it something like <strong>Sun &amp; Seasons 2026</strong>.</li>
+      <li>Go to <strong>Settings</strong> (gear icon) &rarr; <em>Import &amp; export</em> &rarr; <em>Import</em>.</li>
+      <li>Choose your <code>.ics</code> file and select the new calendar you just created.</li>
+    </ol>
+    <p class="hint">To remove: In Settings, find the calendar under <em>Settings for my calendars</em> and click <strong>Delete calendar</strong>. All events disappear at once.</p>
+
+    <h3>Apple Calendar (macOS / iOS)</h3>
+    <ol>
+      <li>Double-click the <code>.ics</code> file (macOS) or open it from Files (iOS).</li>
+      <li>When prompted, create a <strong>new calendar</strong> for the import rather than adding to an existing one.</li>
+    </ol>
+    <p class="hint">To remove: Right-click the calendar in the sidebar and choose <strong>Delete Calendar</strong>.</p>
+
+    <h3>Outlook (Desktop)</h3>
+    <ol>
+      <li>Open Outlook and go to <strong>File</strong> &rarr; <strong>Open &amp; Export</strong> &rarr; <strong>Import/Export</strong>.</li>
+      <li>Choose <em>Import an iCalendar (.ics) or vCalendar file</em> and select your file.</li>
+      <li>When asked, choose <strong>Import</strong> (not Open) and create a new calendar folder first if you want easy removal later.</li>
+    </ol>
+
+    <h3>Outlook on the Web</h3>
+    <ol>
+      <li>Open <a href="https://outlook.live.com" target="_blank" rel="noopener">outlook.live.com</a>.</li>
+      <li>Click the calendar icon, then <strong>Add calendar</strong> &rarr; <strong>Upload from file</strong>.</li>
+      <li>Select your <code>.ics</code> file and choose a calendar to import into (create a new one if desired).</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Removing the calendar</h2>
+    <p>
+      Because the <code>.ics</code> file is a one-time import (not a live subscription), the easiest way
+      to remove all events is to <strong>delete the entire calendar</strong> you imported into.
+      That's why we recommend creating a dedicated calendar (e.g. <em>"Sun &amp; Seasons 2026"</em>)
+      just for this import.
+    </p>
+    <p>If you imported into your main calendar, you would need to delete each event individually.</p>
+  </section>
+
+  <section class="card">
+    <h2>About the events</h2>
+    <table class="preview-table">
+      <thead><tr><th>Event</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Sunrise</td><td>Timed (5 min)</td><td>Local time; day length in description</td></tr>
+        <tr><td>Sunset</td><td>Timed (5 min)</td><td>Local time; day length in description</td></tr>
+        <tr><td>March / September Equinox</td><td>Timed (1 min)</td><td>Astronomical moment</td></tr>
+        <tr><td>June / December Solstice</td><td>Timed (1 min)</td><td>Astronomical moment</td></tr>
+        <tr><td>DST Start / End</td><td>All-day</td><td>Only for locations that observe DST</td></tr>
+        <tr><td>Polar Day / Polar Night</td><td>All-day</td><td>High-latitude locations only</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">Season labels (Spring, Summer, etc.) reflect the Northern Hemisphere convention.</p>
+  </section>
+</main>
+
+<footer>
+  <p>
+    Geocoding by <a href="https://nominatim.openstreetmap.org/" target="_blank" rel="noopener">Nominatim / OpenStreetMap</a> contributors &mdash;
+    <a href="/">Back to calendar generator</a>
+  </p>
+</footer>
+
 </body>
 </html>
