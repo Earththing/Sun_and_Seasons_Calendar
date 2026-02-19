@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial project scaffold\n\n- Add project plan \\(Sun-Seasons-Calendar-Project-Plan.md\\) with resolved tech\n  stack \\(Python/FastAPI/Astral/Meeus/Nominatim\\) and all design decisions\n- Add pyproject.toml with uv/pip dependencies\n- Add app/ skeleton: geocode, timezone, solar, seasons, ics_builder modules\n- Add placeholder tests/, templates/, static/ directories\n- Add .gitignore and README\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}
