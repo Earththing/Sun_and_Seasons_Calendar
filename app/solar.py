@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from astral import LocationInfo
-from astral.sun import sun
+from astral.sun import sunrise as astral_sunrise, sunset as astral_sunset, noon as astral_noon
 
 
 @dataclass
@@ -53,34 +53,53 @@ def compute_year(lat: float, lon: float, tzid: str, year: int) -> list[DayEvents
     return results
 
 
+def _classify_polar(msg: str) -> str:
+    """Return 'polar_day' or 'polar_night' from an Astral exception message.
+
+    Astral raises ValueError with:
+      polar day:   "Sun is always above the horizon on this day, at this location."
+      polar night: "Sun is always below the horizon on this day, at this location."
+    """
+    msg_lower = msg.lower()
+    if "always above" in msg_lower:
+        return "polar_day"
+    elif "always below" in msg_lower:
+        return "polar_night"
+    return "polar_night"  # safe default
+
+
 def _compute_day(location: LocationInfo, d: date, tz: ZoneInfo) -> DayEvents:
+    # Compute sunrise and sunset individually so we get the correct
+    # "always above / always below" exception for each (the combined
+    # sun() call may raise on twilight before reaching rise/set).
     try:
-        s = sun(location.observer, date=d, tzinfo=tz)
-        sunrise = s["sunrise"]
-        sunset = s["sunset"]
-        noon = s["noon"]
-        day_length_sec = max(0, int((sunset - sunrise).total_seconds()))
+        sr = astral_sunrise(location.observer, date=d, tzinfo=tz)
+    except ValueError as e:
         return DayEvents(
             date=d,
-            sunrise=sunrise,
-            sunset=sunset,
-            solar_noon=noon,
-            day_length_sec=day_length_sec,
-            polar_event=None,
-        )
-    except Exception as e:
-        msg = str(e).lower()
-        if "never rises" in msg or "below horizon" in msg:
-            polar_event = "polar_night"
-        elif "never sets" in msg or "above horizon" in msg:
-            polar_event = "polar_day"
-        else:
-            polar_event = "polar_night"  # default for unknown edge case
-        return DayEvents(
-            date=d,
-            sunrise=None,
-            sunset=None,
-            solar_noon=None,
+            sunrise=None, sunset=None, solar_noon=None,
             day_length_sec=None,
-            polar_event=polar_event,
+            polar_event=_classify_polar(str(e)),
         )
+
+    try:
+        ss = astral_sunset(location.observer, date=d, tzinfo=tz)
+    except ValueError as e:
+        return DayEvents(
+            date=d,
+            sunrise=None, sunset=None, solar_noon=None,
+            day_length_sec=None,
+            polar_event=_classify_polar(str(e)),
+        )
+
+    noon = astral_noon(location.observer, date=d, tzinfo=tz)
+    day_length_sec = max(0, int((ss - sr).total_seconds()))
+
+    return DayEvents(
+        date=d,
+        sunrise=sr,
+        sunset=ss,
+        solar_noon=noon,
+        day_length_sec=day_length_sec,
+        polar_event=None,
+    )
