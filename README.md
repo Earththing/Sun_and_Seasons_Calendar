@@ -381,6 +381,30 @@ Query parameters: `fmt` (hm, hm_label, colon, decimal, hms), `display_name`, `do
 
 ## Development
 
+### Running the dev server
+
+```bash
+# Windows
+.venv\Scripts\uvicorn app.main:app --reload
+
+# macOS / Linux
+.venv/bin/uvicorn app.main:app --reload
+```
+
+`--reload` watches for file changes. **Do not use `--reload` in production.**
+
+### Running in production (locally or on a server)
+
+```bash
+# Single worker — fine for a personal/low-traffic site
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Multi-worker with gunicorn (install gunicorn separately)
+gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+The `Procfile` in the repo root uses the single-worker form and is compatible with Heroku, Railway, and Render.
+
 ### Running tests
 
 ```bash
@@ -391,16 +415,16 @@ Query parameters: `fmt` (hm, hm_label, colon, decimal, hms), `display_name`, `do
 .venv\Scripts\python -m pytest tests/ -v
 ```
 
-181 tests covering: solar computation, season algorithms (validated against USNO published tables for 2024–2026), timezone/DST detection, ICS RFC 5545 compliance, FastAPI routes, CLI subcommands, and MCP tool functions.
+183 tests covering: solar computation, season algorithms (validated against USNO published tables for 2024–2026), timezone/DST detection, ICS RFC 5545 compliance, FastAPI routes, CLI subcommands, MCP tool functions, rate limiting, and geocode timeout handling.
 
 ### Project structure
 
 ```
 app/
   cli.py          CLI — sun-and-seasons entry point
-  geocode.py      Address -> lat/lon via Nominatim/OSM
+  geocode.py      Address -> lat/lon via Nominatim/OSM (8s timeout, rate-limited)
   ics_builder.py  RFC 5545 ICS calendar builder
-  main.py         FastAPI web application and routes
+  main.py         FastAPI web application, routes, logging, rate limiting
   seasons.py      Solstice/equinox computation (Meeus Ch. 27 + delta-T)
   solar.py        Sunrise/sunset/day-length computation (Astral/NREL SPA)
   timezone.py     IANA tzid lookup and DST transition detection
@@ -408,7 +432,10 @@ mcp_server.py     MCP stdio server — sun-and-seasons-mcp entry point
 preview.py        Legacy command-line preview script
 static/           CSS
 templates/        Jinja2 HTML templates (index.html, help.html)
-tests/            pytest test suite (181 tests)
+tests/            pytest test suite (183 tests)
+Procfile          Production process declaration (uvicorn, host 0.0.0.0)
+requirements.txt          Pinned runtime dependencies
+requirements-dev.txt      Pinned dev/test dependencies
 ```
 
 ### Linting
