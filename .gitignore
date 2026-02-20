@@ -40,3 +40,9 @@ Thumbs.db
 # Generated / temporary
 *.ics.tmp
 *.log
+
+# Windows reserved-name artifact (created by failed bash redirect)
+/nul
+
+# Local test output
+output.ics

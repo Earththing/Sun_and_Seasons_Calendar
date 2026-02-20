@@ -78,6 +78,16 @@ class TestGeocode:
             r = await client.post("/geocode", json={"address": "London"})
         assert r.status_code == 503
 
+    async def test_rate_limit_exceeded_returns_429(self, client, mock_geocode_la):
+        # Hit the endpoint 11 times; the 11th should be rate-limited (10/minute limit).
+        # slowapi uses the client IP; in tests the remote address is "testclient".
+        responses = [
+            await client.post("/geocode", json={"address": "Los Angeles, CA"})
+            for _ in range(11)
+        ]
+        status_codes = [r.status_code for r in responses]
+        assert 429 in status_codes
+
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/tzid

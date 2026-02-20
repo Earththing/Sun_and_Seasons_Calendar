@@ -51,9 +51,9 @@ class TestGeocodeAddress:
             MockNominatim.return_value.geocode.return_value = mock_locs
             results = geocode_address("Los Angeles", top_n=3)
         assert len(results) == 3
-        # Verify top_n was passed to geocode
+        # Verify top_n and timeout were passed to geocode
         MockNominatim.return_value.geocode.assert_called_once_with(
-            "Los Angeles", exactly_one=False, limit=3
+            "Los Angeles", exactly_one=False, limit=3, timeout=8
         )
 
     def test_raises_value_error_on_no_results(self):
@@ -74,7 +74,17 @@ class TestGeocodeAddress:
         with patch("app.geocode.Nominatim") as MockNominatim:
             MockNominatim.return_value.geocode.return_value = [mock_loc]
             geocode_address("London")
-        MockNominatim.assert_called_once_with(user_agent="sun-and-seasons-calendar/0.1")
+        # User agent should identify the app (contact URL included per Nominatim policy)
+        call_kwargs = MockNominatim.call_args
+        ua = call_kwargs[1]["user_agent"]
+        assert "sun-and-seasons-calendar" in ua
+
+    def test_raises_runtime_error_on_timeout(self):
+        from geopy.exc import GeocoderTimedOut
+        with patch("app.geocode.Nominatim") as MockNominatim:
+            MockNominatim.return_value.geocode.side_effect = GeocoderTimedOut("timed out")
+            with pytest.raises(RuntimeError, match="timed out"):
+                geocode_address("London")
 
     def test_multiple_candidates_returned(self):
         mock_locs = [

@@ -1,0 +1,16 @@
+# Production dependencies — pinned from venv.
+# Generated with: pip freeze | (filter runtime only)
+# To regenerate: pip freeze > requirements-all.txt then filter as below.
+#
+# Install:  pip install -r requirements.txt
+# Dev:      pip install -r requirements.txt -r requirements-dev.txt
+
+astral==3.2
+fastapi==0.129.0
+geopy==2.4.1
+icalendar==7.0.1
+Jinja2==3.1.6
+mcp==1.26.0
+slowapi==0.1.9
+timezonefinder==8.2.1
+uvicorn[standard]==0.41.0

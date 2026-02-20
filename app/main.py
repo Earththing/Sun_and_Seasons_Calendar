@@ -1,5 +1,7 @@
 """Sun & Seasons Calendar — FastAPI application."""
 
+import logging
+import time
 from datetime import date
 from typing import Annotated
 
@@ -8,6 +10,9 @@ from fastapi.responses import Response, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .geocode import geocode_address
 from .timezone import get_tzid, get_dst_transitions
@@ -15,14 +20,57 @@ from .solar import compute_year
 from .seasons import compute_seasons
 from .ics_builder import build_ics, build_daylength_ics, DayLengthFormat
 
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Rate limiting (protects the /geocode Nominatim proxy)
+# ---------------------------------------------------------------------------
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
+
 app = FastAPI(
     title="Sun & Seasons Calendar",
     description="Generate ICS calendars with sunrise, sunset, solstices, and DST events.",
     version="0.1.0",
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+# ---------------------------------------------------------------------------
+# Request logging middleware
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s %s  %.0fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        ms,
+    )
+    return response
 
 YEAR_MIN = 1901
 YEAR_MAX = 2099
@@ -61,14 +109,17 @@ async def help_page(request: Request):
 
 
 @app.post("/geocode", response_model=GeocodeResponse)
-async def geocode(body: GeocodeRequest):
+@limiter.limit("10/minute")
+async def geocode(request: Request, body: GeocodeRequest):
     """Geocode an address string to lat/lon candidates via Nominatim.
 
     The address string is used only for this lookup and is not stored.
     Returns up to 5 candidates for the user to confirm.
+    Rate limited to 10 requests per minute per IP.
     """
     if not body.address.strip():
         raise HTTPException(status_code=400, detail="Address must not be empty.")
+    logger.info("Geocoding address (length=%d)", len(body.address))
     try:
         results = geocode_address(body.address, top_n=5)
     except ValueError as e:
