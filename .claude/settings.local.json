@@ -3,7 +3,22 @@
     "allow": [
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial project scaffold\n\n- Add project plan \\(Sun-Seasons-Calendar-Project-Plan.md\\) with resolved tech\n  stack \\(Python/FastAPI/Astral/Meeus/Nominatim\\) and all design decisions\n- Add pyproject.toml with uv/pip dependencies\n- Add app/ skeleton: geocode, timezone, solar, seasons, ics_builder modules\n- Add placeholder tests/, templates/, static/ directories\n- Add .gitignore and README\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial project scaffold\n\n- Add project plan \\(Sun-Seasons-Calendar-Project-Plan.md\\) with resolved tech\n  stack \\(Python/FastAPI/Astral/Meeus/Nominatim\\) and all design decisions\n- Add pyproject.toml with uv/pip dependencies\n- Add app/ skeleton: geocode, timezone, solar, seasons, ics_builder modules\n- Add placeholder tests/, templates/, static/ directories\n- Add .gitignore and README\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(uv sync:*)",
+      "Bash(python:*)",
+      "Bash(python -m pip:*)",
+      "Bash(.venvScriptspip install fastapi \"uvicorn[standard]\" astral timezonefinder geopy icalendar jinja2 pytest pytest-asyncio httpx ruff)",
+      "Bash(cmd /c \".venv\\\\Scripts\\\\pip install fastapi uvicorn[standard] astral timezonefinder geopy icalendar jinja2 pytest pytest-asyncio httpx ruff 2>&1\")",
+      "Bash(cmd /c:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell.exe -Command \"cd ''S:\\\\source\\\\Sun_and_Seasons_Calendar''; & ''.venv\\\\Scripts\\\\python.exe'' -m pytest tests/ -v -m ''not live'' 2>&1\")",
+      "Bash(powershell.exe -Command:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(\"S:\\\\source\\\\Sun_and_Seasons_Calendar\\\\.venv\\\\Scripts\\\\pip\" list)",
+      "WebFetch(domain:github.com)",
+      "Bash(git -C \"S:\\\\source\\\\Sun_and_Seasons_Calendar\" log --oneline -10)"
     ]
   }
 }
