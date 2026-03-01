@@ -2,12 +2,11 @@
 
 ## Executive summary
 
-Build a small web app and service that, given a user's location and year, generates a calendar of astronomical/civil events—**sunrise, sunset, day length, solstices & equinoxes, season starts, and DST transitions**—and exposes them as:
+Build a small web app and service that, given a user's location and year, generates a calendar of astronomical/civil events—**sunrise, sunset, day length, solstices & equinoxes, season starts, and DST transitions**—and exposes them as a **downloadable ICS file** for one‑time import.
 
-1. a **hosted iCalendar (ICS) feed** that users can subscribe to (auto‑updates), and
-2. a **downloadable ICS file** for one‑time import.
+> **Scope decision**: Hosted subscription feeds (webcal/Google/Outlook) are out of scope. The project focuses on local-first download-only ICS, a JSON API, an MCP server for LLM integration, and a visualization subsystem. No hosting infrastructure required.
 
-Subscribed calendars can be **hidden or unsubscribed in one step** in Google/Apple/Outlook; imported files are static, so users should import them into a **separate calendar** that can be deleted to remove everything at once.
+Imported files are static; users should import them into a **separate calendar** that can be deleted to remove everything at once.
 
 ---
 
@@ -21,11 +20,12 @@ Subscribed calendars can be **hidden or unsubscribed in one step** in Google/App
 
 ## Primary deliverables
 
-- **Web UI (responsive)**: Address input → Options → Preview → **Subscribe** (webcal/https) / **Download .ics**
-- **ICS feed endpoint** (stateless, cacheable): `GET /calendar/{year}/{lat},{lon}.ics?tzid=…&opts=…`
-- **Download endpoint**: same URL with `?download=1`
+- **Web UI (responsive)**: Address input → Options → Preview → **Download .ics**
+- **ICS download endpoint**: `GET /calendar/{year}/{lat},{lon}.ics?tzid=…&opts=…`
 - **JSON API**: `GET /api/v1/sun?lat=…&lon=…&year=…` → JSON (useful for developers and internal use)
-- **Docs/help**: how to add, hide, unsubscribe, or delete. (Link Google/Apple/Outlook help.)
+- **MCP server**: exposes all solar/calendar tools to Claude and other LLM clients
+- **Visualization subsystem** (optional): daylight heatmaps, year-long animations
+- **Docs/help**: how to import, manage, and delete calendar files in Google/Apple/Outlook
 
 ---
 
@@ -130,17 +130,12 @@ Subscribed calendars can be **hidden or unsubscribed in one step** in Google/App
 
 ## Calendar publishing strategy
 
-### A) Hosted ICS feed (recommended, Phase 2+)
+**Download-only** — no hosted subscription feed.
 
-- Offer `webcal://` and `https://` links.
-- Google helper: `https://calendar.google.com/calendar/r?cid=webcal://…`
-- Outlook on the web: `https://outlook.office.com/calendar/0/addfromweb?url=webcal://…`
-- Removal: unsubscribe or hide in one step; all events disappear.
-
-### B) Downloadable ICS (MVP)
-
-- Clear note: imports are **static** and won't update.
-- Prompt users to *create a new calendar first* before importing, so they can delete it later.
+- ICS files are generated on demand and downloaded by the user.
+- Clear note in the UI: imports are **static** and won't auto-update.
+- Prompt users to *create a new calendar first* before importing, so they can delete it later to remove all events in one step.
+- No hosting infrastructure, domain, or CDN required.
 
 ---
 
@@ -270,8 +265,8 @@ Twilight and golden_hour fields are `null` unless those options are enabled — 
 
 ## Rate limiting / abuse (pragmatic)
 
-For local use: none needed.
-For eventual hosting: CDN edge caching of ICS responses means most requests never hit compute. If traffic is unexpectedly high, the first mitigation is **download-only mode** (remove subscription feeds temporarily) rather than complex rate limiting. Year range is bounded to [1901..2099] server-side to prevent unbounded compute.
+For local use: slowapi rate limiting is in place as a courtesy guard.
+Year range is bounded to [1901..2099] server-side to prevent unbounded compute. No hosting infrastructure is planned, so CDN caching is not a concern.
 
 ---
 
@@ -348,10 +343,10 @@ Sun_and_Seasons_Calendar/
 - ✅ MCP server (`mcp_server.py`) — exposes all tools to Claude and other LLM clients via FastMCP
 - ✅ `sun-and-seasons` CLI subcommand (pyproject entry point)
 - ✅ Comprehensive README with install, usage, API, and MCP docs
+- ~~ICS subscription feed (hosted)~~ — **removed from scope** (download-only is sufficient)
 - ⏳ Twilight options (civil/nautical/astronomical) — deferred to Phase 3
 - ⏳ Meteorological seasons toggle — deferred to Phase 3
-- ⏳ ICS subscription feed (hosted) — deferred once a domain is chosen
-- ⏳ UI polish, accessibility, webcal/Google/Outlook deep links
+- ⏳ UI polish, accessibility
 
 **Visualization subsystem ✅ COMPLETE** *(optional extras, `pip install -e ".[viz]"`)*
 
@@ -376,11 +371,10 @@ Sun_and_Seasons_Calendar/
 - Meteorological seasons toggle
 - Printable/monthly preview
 - Shareable preset URLs
-- Multi-year feeds
+- Multi-year ICS files
 - i18n / language options
 - API documentation page
-- Telemetry (privacy-preserving)
-- ICS subscription feed (hosted) once domain is confirmed
+- Telemetry (privacy-preserving, optional)
 
 ---
 
@@ -419,9 +413,9 @@ Sun_and_Seasons_Calendar/
 
 ## Open questions
 
-1. Do you have a domain name in mind for eventual hosting? (Affects PRODID and UID suffix — can use `sunandseasons.local` for now.)
-2. Should the MVP UI show a map pin after geocoding so the user can confirm the right location was found?
-3. Should we support address input in languages other than English from day one, or defer to Phase 3?
+1. Should the UI show a map pin after geocoding so the user can confirm the right location was found?
+2. Should we support address input in languages other than English from day one, or defer to Phase 3?
+3. Should the Nominatim user-agent URL be updated once the project has a public GitHub URL?
 
 ---
 

@@ -36,7 +36,7 @@ Four ways to use it:
 - **DST clock changes** — Spring Forward / Fall Back all-day events; omitted automatically for locations that don't observe DST
 - **Day Length Calendar** — optional separate calendar with one all-day event per day showing hours of daylight; five title formats to choose from
 - **Polar regions** — Polar Day / Polar Night all-day events for high-latitude locations (e.g. Tromsø)
-- **Stable UIDs** — same inputs always produce the same event UIDs, so calendar subscription clients update in place
+- **Stable UIDs** — same inputs always produce the same event UIDs, so re-importing an updated file doesn't create duplicates
 - **RFC 5545 compliant** — CRLF line endings, 75-octet line folding, VTIMEZONE component
 
 ---
