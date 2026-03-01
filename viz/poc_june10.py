@@ -6,7 +6,7 @@ Requires the [viz] optional dependencies:
     pip install -e ".[viz]"
 
 Run from the project root:
-    .venv/Scripts/python viz/poc_june8.py
+    .venv/Scripts/python viz/poc_june10.py
 """
 
 import os
@@ -34,14 +34,14 @@ from app.timezone import get_tzid
 # Configuration
 # ---------------------------------------------------------------------------
 
-TARGET_DATE = date(2026, 6, 8)
+TARGET_DATE = date(2026, 6, 10)
 
 # Grid bounds (lower 48)
 LAT_MIN, LAT_MAX = 24.0, 50.0
 LON_MIN, LON_MAX = -125.0, -66.0
 STEP = 0.5  # degrees  (~55 km N-S, ~45 km E-W in the US)
 
-OUTPUT_PATH = "viz/poc_june8.png"
+OUTPUT_PATH = "viz/poc_june10.png"
 
 # States/territories to exclude from the lower-48 mask
 EXCLUDE_NAMES = {
