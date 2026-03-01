@@ -46,3 +46,9 @@ Thumbs.db
 
 # Local test output
 output.ics
+
+# Visualization: generated frames and video output
+# Run viz/render_day.py and viz/make_video.py to regenerate locally.
+viz/frames/
+viz/*.mp4
+viz/*.png

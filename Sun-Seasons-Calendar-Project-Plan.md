@@ -82,6 +82,9 @@ Subscribed calendars can be **hidden or unsubscribed in one step** in Google/App
 | ICS rendering | **icalendar** (Python) | RFC 5545 compliant; handles line folding, CRLF, VTIMEZONE |
 | Frontend | **Plain HTML/CSS/JS** (MVP) | No framework needed for a form + results page |
 | Dev tooling | **uv** (package manager), **pytest**, **ruff** | Fast, modern Python tooling |
+| **MCP server** | **FastMCP** | Exposes all API tools to Claude and other LLM clients |
+| **Visualization** *(optional)* | **matplotlib + cartopy + numpy + shapely** | Daylight heatmap frames and year-long animations |
+| **Video assembly** *(optional)* | **ffmpeg** (via `viz/make_video.py`) | Assembles frame PNGs into MP4 animation via concat demuxer |
 
 ---
 
@@ -170,7 +173,7 @@ UIDs must be stable across regenerations so subscribed calendars update in place
 [Browser]
     │  address + year + options
     ▼
-[FastAPI app — runs on localhost for now]
+[FastAPI app — app/main.py]
     ├── GET /                        → HTML form (address, year, options)
     ├── POST /geocode                → Nominatim → {lat, lon, display_name}
     ├── GET /api/v1/sun              → JSON solar events
@@ -178,12 +181,29 @@ UIDs must be stable across regenerations so subscribed calendars update in place
     ├── GET /calendar/{year}/{lat},{lon}.ics  → ICS feed or download
     └── GET /help                   → calendar client instructions
 
+[MCP server — mcp_server.py]           ← LLM clients (Claude, etc.)
+    ├── get_solar_day(lat,lon,date)  → sunrise/sunset/day_length JSON
+    ├── get_solar_year(lat,lon,year) → year stats + monthly samples
+    ├── get_seasons(lat,lon,year)    → solstice/equinox local times
+    ├── get_dst(lat,lon,year)        → DST transitions
+    ├── get_timezone(lat,lon)        → IANA tzid
+    ├── geocode(address)             → lat/lon candidates
+    ├── generate_ics_url(...)        → ICS calendar download URL
+    └── render_daylight_frame(...)   → PNG heatmap (requires [viz])
+
 [Compute layer — pure Python, no HTTP]
     ├── geocode.py        address → (lat, lon)
     ├── timezone.py       (lat, lon) → tzid, DST transitions
     ├── solar.py          Astral wrapper → daily events JSON
     ├── seasons.py        Meeus → equinox/solstice UTC + local
     └── ics_builder.py    JSON → RFC 5545 ICS text
+
+[Visualization layer — viz/ — optional [viz] extras]
+    ├── render_day.py     daylight heatmap (single frame or batch)
+    │   ├── GridSpec      pre-built land mask + tz cache for batch speed
+    │   ├── 5 scale modes region / year / day / reference / percentile
+    │   └── polar sentinels: black=polar night, white=polar day
+    └── make_video.py     ffmpeg automation: frames → MP4
 ```
 
 **Storage**: None. All computation is on-demand. No database required for MVP.
@@ -276,9 +296,15 @@ Sun_and_Seasons_Calendar/
 │   ├── test_solar.py
 │   ├── test_seasons.py
 │   ├── test_ics.py
-│   └── test_timezone.py
+│   ├── test_timezone.py
+│   └── test_viz.py       # visualization tests (requires [viz] extras)
+├── viz/
+│   ├── render_day.py     # daylight heatmap renderer (single frame or batch)
+│   ├── make_video.py     # ffmpeg automation: frames → MP4
+│   └── poc_june8.py      # original proof-of-concept (kept for reference)
+├── mcp_server.py         # FastMCP server exposing all tools to LLM clients
 ├── Sun-Seasons-Calendar-Project-Plan.md
-├── pyproject.toml        # uv / pip dependencies
+├── pyproject.toml        # uv / pip dependencies (core + [viz] optional extras)
 ├── .gitignore
 └── README.md
 ```
@@ -290,54 +316,84 @@ Sun_and_Seasons_Calendar/
 | # | Decision | Choice |
 |---|---|---|
 | 1 | SPA vs library | **Astral** (don't implement SPA from scratch for MVP) |
-| 2 | Twilight in MVP? | Phase 2 (MVP: sunrise/sunset/day length only) |
+| 2 | Twilight in MVP? | Deferred to Phase 3 (MVP: sunrise/sunset/day length only) |
 | 3 | One event vs two per day | **Two separate events** (Sunrise + Sunset) |
-| 4 | Meteorological seasons | Phase 2 opt-in toggle |
+| 4 | Meteorological seasons | Deferred to Phase 3 |
 | 5 | JSON API | **Yes** — minimal extra cost, useful for devs |
 | 6 | Location input | **Address field** → geocode to lat/lon; address not stored |
-| 7 | Rate limiting | CDN caching first; download-only fallback if needed |
+| 7 | Rate limiting | **slowapi** in production; CDN caching recommended for hosting |
+| 8 | LLM integration | **FastMCP server** exposing all solar/calendar tools |
+| 9 | Visualization | **Optional `[viz]` extras** — matplotlib/cartopy heatmaps + ffmpeg video |
+| 10 | Viz color scale | **5 modes**: region, year, day, reference, percentile (with `--clip-pct`) |
+| 11 | Polar day/night in viz | **Sentinels**: black = 0 h (polar night), white = 24 h (polar day) |
 
 ---
 
 ## Roadmap (phased)
 
-**MVP (local, ~2–3 weeks)**
+**MVP ✅ COMPLETE**
 
-- Address input → geocode → tzid → Astral sunrise/sunset/day length
-- Meeus equinox/solstice events
-- DST start/end events from tzdb
-- ICS download (RFC 5545, VTIMEZONE, stable UIDs)
-- JSON API endpoint
-- Minimal HTML UI
-- pytest suite with golden-file ICS tests
+- ✅ Address input → geocode → tzid → Astral sunrise/sunset/day length
+- ✅ Meeus equinox/solstice events
+- ✅ DST start/end events from tzdb
+- ✅ ICS download (RFC 5545, VTIMEZONE, stable UIDs)
+- ✅ JSON API endpoint
+- ✅ Minimal HTML UI
+- ✅ pytest suite (186 core tests covering solar, seasons, ICS, timezone, FastAPI routes)
 
-**Phase 2 (~2–3 weeks)**
+**Phase 2 ✅ COMPLETE**
 
-- Twilight options (civil/nautical/astronomical)
-- Meteorological seasons toggle
-- Polar day/night edge case handling
-- UI polish, accessibility
-- ICS subscription feed (hosted)
-- Webcal/Google/Outlook deep links
-- CDN/caching layer for hosting
+- ✅ Polar day/night edge case handling (24 h / 0 h sentinel values)
+- ✅ Rate limiting (slowapi), request-level logging, geocode timeouts
+- ✅ MCP server (`mcp_server.py`) — exposes all tools to Claude and other LLM clients via FastMCP
+- ✅ `sun-and-seasons` CLI subcommand (pyproject entry point)
+- ✅ Comprehensive README with install, usage, API, and MCP docs
+- ⏳ Twilight options (civil/nautical/astronomical) — deferred to Phase 3
+- ⏳ Meteorological seasons toggle — deferred to Phase 3
+- ⏳ ICS subscription feed (hosted) — deferred once a domain is chosen
+- ⏳ UI polish, accessibility, webcal/Google/Outlook deep links
+
+**Visualization subsystem ✅ COMPLETE** *(optional extras, `pip install -e ".[viz]"`)*
+
+- ✅ `viz/render_day.py` — daylight heatmap renderer
+  - Single frame or batch (full year / date range) with `GridSpec` for fast repeated rendering
+  - Five color scale modes: `region`, `year`, `day`, `reference`, `percentile`
+  - `--clip-pct N` for tunable percentile clipping (better within-day north-south gradient)
+  - Polar sentinels: **black** = polar night (0 h), **white** = polar day (24 h)
+  - Colorbar `extend` arrows show sentinel colours automatically
+  - All three regions: lower 48, Alaska, Hawaii; `--region all` composite frame
+  - ETA progress reporting for batch runs; `--overwrite` to re-render existing frames
+- ✅ `viz/make_video.py` — ffmpeg automation
+  - concat demuxer (Windows-safe); even-pixel-dimension fix for H.264/H.265
+  - Year / date-range filtering; auto output naming; FPS, CRF, codec options
+- ✅ `render_daylight_frame` MCP tool (lazy import, graceful error if [viz] absent)
+- ✅ 123 visualization tests (region definitions, argparse, color scale logic, GridSpec, percentile helpers, polar-sentinel settings, integration)
 
 **Phase 3**
 
 - Golden hour events
+- Twilight options (civil/nautical/astronomical)
+- Meteorological seasons toggle
 - Printable/monthly preview
 - Shareable preset URLs
 - Multi-year feeds
 - i18n / language options
-- API documentation
+- API documentation page
 - Telemetry (privacy-preserving)
+- ICS subscription feed (hosted) once domain is confirmed
 
 ---
 
 ## Testing & validation
 
-- **Unit tests**: Astral outputs vs NREL reference points (spot-check grid); Meeus dates vs published tables (±2 min tolerance).
-- **Golden tests**: ICS rendering — line folding, CRLF, VTIMEZONE, UID stability, separate Sunrise/Sunset events.
-- **Client integration** (Phase 2): Google Calendar subscribe/unsubscribe/hide; Apple Calendar; Outlook web.
+**Current status: 309 tests, all passing.**
+
+- **Unit tests**: Astral outputs vs NREL reference points; Meeus dates vs USNO published tables (2024–2026, ±2 min tolerance); ICS rendering (line folding, CRLF, VTIMEZONE, UID stability, separate Sunrise/Sunset events).
+- **API tests**: FastAPI route tests via `TestClient`; rate limiting, geocode timeout handling, error responses.
+- **MCP tests**: all tool functions covered including edge cases.
+- **Visualization tests** (123, requires `[viz]` extras): region definitions, argparse (all 5 scale modes, batch args), color scale resolution, GridSpec, percentile helpers (`_percentile_vmin_vmax`, `_sample_annual_data`), polar-sentinel colormap settings (`_daylight_cmap_settings`), output path resolution, integration tests (compute grid, verify physical properties).
+- **Integration** (manual): rendered lower 48 heatmap frames at step=0.1°, assembled into MP4 via `make_video.py`.
+- **Client integration** (Phase 3): Google Calendar subscribe/unsubscribe/hide; Apple Calendar; Outlook web.
 
 ---
 

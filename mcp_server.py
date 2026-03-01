@@ -366,6 +366,77 @@ def generate_ics_url(
 
 
 # ---------------------------------------------------------------------------
+# Tool: render_daylight_frame  (requires [viz] optional dependencies)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def render_daylight_frame(
+    date: str,
+    region: str = "lower48",
+    step: float = 0.5,
+    out_dir: str = "viz/frames/",
+) -> str:
+    """Render a daylight heatmap for a single date and save it as a PNG.
+
+    Requires the [viz] optional dependencies:
+        pip install -e ".[viz]"
+
+    Returns the absolute path to the saved PNG file.  Rendering typically
+    takes 15–90 seconds depending on region and step size.
+
+    Args:
+        date:    Date in YYYY-MM-DD format.
+        region:  Geographic region — lower48, alaska, hawaii, or all
+                 (default: lower48).  'all' renders a composite frame.
+        step:    Grid resolution in degrees (default: 0.5 — balances quality
+                 and speed; 0.25 is finer but ~4× slower).
+        out_dir: Output directory.  The file is named YYYYMMDD.png for
+                 lexicographic frame sorting (default: viz/frames/).
+    """
+    try:
+        from viz.render_day import (
+            REGIONS,
+            build_land_mask,
+            compute_daylight_grid,
+            render_composite,
+            render_heatmap,
+            resolve_output_path,
+        )
+    except ImportError as exc:
+        return (
+            f"Error: viz dependencies not installed. "
+            f"Run: pip install -e \".[viz]\"  ({exc})"
+        )
+
+    valid_regions = list(REGIONS) + ["all"]
+    if region not in valid_regions:
+        return f"Error: region must be one of {valid_regions}, got {region!r}"
+
+    try:
+        target = date_type.fromisoformat(date)
+    except ValueError:
+        return f"Error: date must be YYYY-MM-DD, got {date!r}"
+
+    if not (0.01 <= step <= 2.0):
+        return "Error: step must be between 0.01 and 2.0 degrees"
+
+    out_path = resolve_output_path(out_dir, target)
+
+    try:
+        if region == "all":
+            render_composite(target, step, out_path, dpi=150, show=False)
+        else:
+            mask = build_land_mask(region)
+            lats, lons, grid = compute_daylight_grid(region, target, step, mask)
+            render_heatmap(region, target, lats, lons, grid,
+                           out_path=out_path, dpi=150, show=False)
+    except Exception as exc:
+        return f"Error rendering frame: {exc}"
+
+    return f"Saved: {out_path.resolve()}"
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

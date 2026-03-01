@@ -2,13 +2,14 @@
 
 Generate a personal ICS calendar of **sunrise, sunset, solstices, equinoxes, and DST clock changes** for any location in the world.
 
-Three ways to use it:
+Four ways to use it:
 
 | Interface | Best for |
 |-----------|----------|
 | **Web app** | Picking a location, previewing data, and downloading a calendar file |
 | **CLI** | Scripting, automation, quick terminal lookups |
 | **MCP server** | Asking Claude questions like *"when does the sun rise in Denver this summer?"* |
+| **Heatmap viz** *(optional)* | Generating daylight heatmap images and animations for the US |
 
 ---
 
@@ -21,9 +22,10 @@ Three ways to use it:
 5. [Importing Your Calendar](#importing-your-calendar)
 6. [Command-Line Interface](#command-line-interface)
 7. [MCP Server (Claude Integration)](#mcp-server-claude-integration)
-8. [JSON API](#json-api)
-9. [Development](#development)
-10. [Accuracy & Attributions](#accuracy--attributions)
+8. [Daylight Heatmap Visualization](#daylight-heatmap-visualization)
+9. [JSON API](#json-api)
+10. [Development](#development)
+11. [Accuracy & Attributions](#accuracy--attributions)
 
 ---
 
@@ -64,6 +66,32 @@ python -m venv .venv
 This installs all dependencies and registers two command-line entry points:
 - `sun-and-seasons` — the CLI
 - `sun-and-seasons-mcp` — the MCP stdio server
+
+### Optional: Visualization dependencies
+
+To generate daylight heatmap images and animations, install the `[viz]` extras:
+
+```bash
+# Windows
+.venv\Scripts\pip install -e ".[viz]"
+
+# macOS / Linux
+.venv/bin/pip install -e ".[viz]"
+```
+
+This adds **matplotlib**, **cartopy**, and **numpy**. These are omitted from the base install because cartopy has native library dependencies (GEOS, PROJ) that require a C compiler or a pre-built wheel.
+
+For video assembly you also need **ffmpeg** on your PATH:
+```bash
+# Windows
+winget install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Linux
+sudo apt install ffmpeg
+```
 
 ---
 
@@ -290,8 +318,9 @@ After editing the config, **fully quit and reopen Claude Desktop** (closing the 
 | `get_seasons` | Solstices and equinoxes with local and UTC times |
 | `get_dst` | DST clock-change dates, or confirmation that a location doesn't use DST |
 | `generate_ics_url` | Build the ICS download URL for the running web server |
+| `render_daylight_frame` | Render a US daylight heatmap PNG for a single date *(requires `[viz]`)* |
 
-All tools are read-only and pure-compute. The only network call is `geocode`, which queries Nominatim/OpenStreetMap. No data is stored.
+All tools except `geocode` are pure-compute with no network calls and no stored data. `render_daylight_frame` requires the `[viz]` optional dependencies — it returns a helpful error message if they are not installed.
 
 ### Running the server manually (for testing)
 
@@ -304,6 +333,144 @@ All tools are read-only and pure-compute. The only network call is `geocode`, wh
 ```
 
 The server speaks the MCP stdio protocol on stdout/stdin. Use `Ctrl+C` to stop it.
+
+---
+
+## Daylight Heatmap Visualization
+
+> **Requires** the `[viz]` optional extras — see [Installation](#installation).
+
+Generate color-coded daylight heatmaps for the United States (lower 48, Alaska, Hawaii, or a composite of all three). Frames are named `YYYYMMDD.png` so they sort chronologically and can be assembled into an animation.
+
+### Single frame
+
+```bash
+# Lower 48, default step (0.25°, ~28 km cells)
+.venv\Scripts\python viz/render_day.py --date 2026-06-21
+
+# Alaska at a finer grid
+.venv\Scripts\python viz/render_day.py --date 2026-12-21 --region alaska --step 0.1
+
+# All three regions in one composite frame
+.venv\Scripts\python viz/render_day.py --date 2026-06-08 --region all
+
+# Save to a specific directory (auto-named 20260608.png)
+.venv\Scripts\python viz/render_day.py --date 2026-06-08 --out viz/frames/
+```
+
+### Batch generation
+
+The land mask and timezone cache are built **once** and reused for every frame — much faster than running the script 365 times.
+
+```bash
+# All 365 days of 2026, lower 48 (headless — no pop-up windows)
+.venv\Scripts\python viz/render_day.py --year 2026 --no-show
+
+# Summer only, Alaska
+.venv\Scripts\python viz/render_day.py --start 2026-06-01 --end 2026-08-31 --region alaska --no-show
+
+# Re-render frames that already exist
+.venv\Scripts\python viz/render_day.py --year 2026 --overwrite --no-show
+```
+
+Progress is printed as each frame completes with an ETA:
+```
+  [  1/365] 2026-01-01  ETA 10m 12s
+  [  2/365] 2026-01-02  ETA 9m 58s
+  ...
+```
+
+### `--region` options
+
+| Value | Coverage |
+|-------|----------|
+| `lower48` *(default)* | Continental United States |
+| `alaska` | Alaska (including Aleutians) |
+| `hawaii` | Hawaiian Islands |
+| `all` | Composite frame: lower 48 (main) + Alaska inset + Hawaii inset |
+
+### `--scale` options
+
+Controls the colorbar range. Choose based on whether frames need to be comparable across dates.
+
+| Value | Color range | Animation-safe | Best for |
+|-------|-------------|----------------|----------|
+| `region` *(default)* | Fixed annual range for the region¹ | ✅ | Baseline animation — frames directly comparable |
+| `year` | Fixed 0–24 h (full physical range) | ✅ | Cross-region comparison; Alaska winter vs. summer |
+| `percentile` | Annual N%–(100-N)% data range² | ✅ | **Recommended for animation** — better WA-vs-TX gradient than `region`, no per-frame shifting |
+| `reference` | Fixed to one reference day's data range³ | ✅ | Maximum contrast on that day; dramatic seasonal collapse |
+| `day` | Auto-scaled to each frame's data | ❌ | Single-frame inspection only — frames **not** comparable |
+
+¹ Lower 48: 8–16.5 h · Alaska: 0–24 h · Hawaii: 10.5–14 h
+
+² **Percentile scale** samples the 21st of each month to estimate the annual data distribution, then clips the extreme N% at each end (default `--clip-pct 5`). For the lower 48 at 5% clip this gives roughly **9.5–15.8 h** — a 6.3 h window vs. 8.5 h for `region`. That means the same 2–4 h north-south gradient within a day takes up **~35–47% of the colormap** instead of ~24–47%, giving noticeably more visual separation between WA and TX on any given frame. Winter frames may have a handful of northernmost grid points clip to the dark end, but the year-progression remains fully visible.
+
+Tune the clipping aggressiveness with `--clip-pct`:
+- `--clip-pct 5` *(default)* — gentle clip, minimal clipping visible, ~26% tighter than `region`
+- `--clip-pct 10` — moderate clip, noticeably tighter, northern winter points saturate
+- `--clip-pct 15` — aggressive clip, maximum intra-frame contrast, more saturation
+
+³ The reference day defaults to **June 21** (steepest north-south gradient). Winter frames compress toward the dark end. Override with `--ref-date`.
+
+```bash
+# Percentile scale — recommended for most year-long animations (default 5% clip)
+.venv\Scripts\python viz/render_day.py --year 2026 --scale percentile --no-show
+
+# Tighter clip for more dramatic within-day contrast (more northern winter clipping)
+.venv\Scripts\python viz/render_day.py --year 2026 --scale percentile --clip-pct 10 --no-show
+
+# Reference scale — maximum contrast on June 21, dramatic seasonal collapse
+.venv\Scripts\python viz/render_day.py --year 2026 --scale reference --no-show
+
+# Use a specific reference day (e.g. winter solstice)
+.venv\Scripts\python viz/render_day.py --year 2026 --scale reference --ref-date 2026-12-21 --no-show
+
+# Fully custom fixed range
+.venv\Scripts\python viz/render_day.py --date 2026-06-08 --vmin 10 --vmax 16
+```
+
+### Grid resolution (`--step`)
+
+| Step | Cell size | Notes |
+|------|-----------|-------|
+| `0.5` | ~55 km | Fast; good for previewing |
+| `0.25` *(default)* | ~28 km | Good quality/speed balance |
+| `0.1` | ~11 km | Fine detail; ~6× slower per frame |
+
+### Assembling a video
+
+Once you have a directory of frames, use `viz/make_video.py` to assemble them via **ffmpeg**:
+
+```bash
+# All frames in viz/frames/ → viz/daylight.mp4 at 30 fps
+.venv\Scripts\python viz/make_video.py
+
+# Just 2026, slower playback
+.venv\Scripts\python viz/make_video.py --year 2026 --fps 15
+
+# Summer range only
+.venv\Scripts\python viz/make_video.py --start 2026-06-01 --end 2026-08-31
+
+# Smaller file with H.265
+.venv\Scripts\python viz/make_video.py --codec h265
+
+# Custom output path
+.venv\Scripts\python viz/make_video.py --frames viz/frames/alaska --out viz/alaska_2026.mp4
+```
+
+The script uses ffmpeg's **concat demuxer** (not glob patterns), which works correctly on Windows, macOS, and Linux. The output filename defaults to `viz/daylight.mp4`, or `viz/daylight_2026.mp4` when `--year` is given.
+
+Key options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--frames DIR` | `viz/frames/` | Directory of `YYYYMMDD.png` files |
+| `--out FILE` | auto | Output video path |
+| `--fps N` | `30` | Playback frame rate |
+| `--year YYYY` | — | Include only this year's frames |
+| `--start / --end` | — | Date range filter |
+| `--crf N` | `18` | Quality (lower = better; 0 = lossless) |
+| `--codec` | `h264` | `h264`, `h265`, or `vp9` |
 
 ---
 
@@ -415,7 +582,17 @@ The `Procfile` in the repo root uses the single-worker form and is compatible wi
 .venv\Scripts\python -m pytest tests/ -v
 ```
 
-183 tests covering: solar computation, season algorithms (validated against USNO published tables for 2024–2026), timezone/DST detection, ICS RFC 5545 compliance, FastAPI routes, CLI subcommands, MCP tool functions, rate limiting, and geocode timeout handling.
+309 tests covering: solar computation, season algorithms (validated against USNO published tables for 2024–2026), timezone/DST detection, ICS RFC 5545 compliance, FastAPI routes, CLI subcommands, MCP tool functions, rate limiting, geocode timeout handling, and visualization (region definitions, argparse, color scale logic, GridSpec, output path resolution).
+
+Slow integration tests (full grid computation) are excluded by default — run with `-m slow` to include them:
+
+```bash
+# Fast tests only (default CI)
+.venv\Scripts\python -m pytest tests/ -m "not slow and not live"
+
+# Include slow viz integration tests
+.venv\Scripts\python -m pytest tests/ -m "not live"
+```
 
 ### Project structure
 
@@ -428,11 +605,15 @@ app/
   seasons.py      Solstice/equinox computation (Meeus Ch. 27 + delta-T)
   solar.py        Sunrise/sunset/day-length computation (Astral/NREL SPA)
   timezone.py     IANA tzid lookup and DST transition detection
+viz/                      Optional visualization subsystem (requires [viz] extras)
+  render_day.py   Daylight heatmap renderer — single frame or batch; CLI + library API
+  make_video.py   ffmpeg wrapper — assembles YYYYMMDD.png frames into an MP4/WebM
+  poc_june8.py    Original proof-of-concept (kept for reference)
 mcp_server.py     MCP stdio server — sun-and-seasons-mcp entry point
 preview.py        Legacy command-line preview script
 static/           CSS
 templates/        Jinja2 HTML templates (index.html, help.html)
-tests/            pytest test suite (183 tests)
+tests/            pytest test suite (309 tests)
 Procfile          Production process declaration (uvicorn, host 0.0.0.0)
 requirements.txt          Pinned runtime dependencies
 requirements-dev.txt      Pinned dev/test dependencies
